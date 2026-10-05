@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hurricane Track Playback</title>
+<meta name="description" content="Replay 20 real Atlantic hurricanes from NOAA's best-track data, with satellite-style infrared storms at true scale and NHC's official forecast cones as issued.">
+<meta property="og:title" content="Hurricane Track Playback">
+<meta property="og:description" content="Replay real Atlantic hurricanes from NOAA data and compare them with NHC's forecasts as issued. Built with Highcharts Maps and Highcharts Grid.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mekhatria.github.io/hurricane/">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highcharts/grid-lite@3.2.0/css/grid-lite.css">
+<style>
+  :root {
+    --bg: #0b1220; --panel: #121b30; --panel2: #16223f;
+    --text: #e8edf7; --muted: #93a2c4; --accent: #4fc3f7; --border: #223154;
+    --map-bg: radial-gradient(ellipse at 50% 40%, #0d2747 0%, #081a31 60%, #06142a 100%);
+    --tip-bg: rgba(10,20,38,0.92); --tip-border: #2b3d63; --tip-text: #e8edf7; --tip-muted: #93a2c4;
+    --tip-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef2fb; --panel: #ffffff; --panel2: #f4f7fd;
+      --text: #0f172a; --muted: #57607a; --accent: #0284c7; --border: #dbe3f5;
+    --map-bg: radial-gradient(ellipse at 50% 40%, #dcebf7 0%, #c9dfef 60%, #b9d4ea 100%);
+    --tip-bg: rgba(255,255,255,0.95); --tip-border: #cbd6e8; --tip-text: #0f172a; --tip-muted: #57607a;
+    --tip-shadow: 0 4px 14px rgba(15,30,60,0.16); --tip-cat-text: #0f172a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1220; --panel: #121b30; --panel2: #16223f;
+    --text: #e8edf7; --muted: #93a2c4; --accent: #4fc3f7; --border: #223154;
+    --map-bg: radial-gradient(ellipse at 50% 40%, #0d2747 0%, #081a31 60%, #06142a 100%);
+    --tip-bg: rgba(10,20,38,0.92); --tip-border: #2b3d63; --tip-text: #e8edf7; --tip-muted: #93a2c4;
+    --tip-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #eef2fb; --panel: #ffffff; --panel2: #f4f7fd;
+    --text: #0f172a; --muted: #57607a; --accent: #0284c7; --border: #dbe3f5;
+    --map-bg: radial-gradient(ellipse at 50% 40%, #dcebf7 0%, #c9dfef 60%, #b9d4ea 100%);
+    --tip-bg: rgba(255,255,255,0.95); --tip-border: #cbd6e8; --tip-text: #0f172a; --tip-muted: #57607a;
+    --tip-shadow: 0 4px 14px rgba(15,30,60,0.16); --tip-cat-text: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1150px; margin: 0 auto; padding: 20px 16px 32px; }
+  h1 { font-size: 1.25rem; margin: 0 0 2px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  /* Segmented switches (theme, satellite style) */
+  .seg {
+    display: inline-flex; gap: 2px; padding: 3px; flex-shrink: 0;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .seg button {
+    background: transparent; color: var(--text); border: none; border-radius: 9px;
+    padding: 6px 12px; font-size: 0.82rem; font-weight: 650; gap: 7px;
+  }
+  .seg button:hover { opacity: 1; background: var(--panel2); }
+  .seg button[aria-checked="true"] { background: var(--panel2); box-shadow: inset 0 0 0 1px var(--border); }
+  .seg svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .layout { display: flex; flex-direction: column; gap: 14px; }
+  #container {
+    width: 100%; height: min(600px, 72vh); min-height: 380px;
+    background: var(--map-bg);
+    border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+    position: relative;
+  }
+  .controls {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  button {
+    background: var(--accent); color: #04121f; border: none; border-radius: 999px;
+    padding: 9px 18px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+  select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font-size: 0.82rem;
+  }
+  #stormSelect { font-size: 0.95rem; font-weight: 650; padding: 8px 12px; min-width: 210px; }
+  .grid-panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .grid-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 650; font-size: 0.95rem; }
+  .grid-title span { color: var(--muted); font-size: 0.75rem; font-weight: 500; }
+  /* Map Highcharts Grid's theme variables onto the page tokens so it follows light/dark. */
+  #stormGrid, #stormGrid .hcg-theme-default {
+    --hcg-font-family: inherit; --hcg-font-size: 0.82rem;
+    --hcg-background: var(--panel); --hcg-color: var(--text); --hcg-border-color: var(--border);
+    --hcg-header-background: var(--panel2); --hcg-header-color: var(--muted);
+    --hcg-header-font-weight: 650; --hcg-header-row-border-color: var(--border);
+    --hcg-row-background: var(--panel); --hcg-row-even-background: var(--panel2);
+    --hcg-row-border-color: var(--border); --hcg-column-border-color: transparent;
+    --hcg-header-column-border-color: transparent;
+    --hcg-row-hover-background: rgba(79,195,247,0.12); --hcg-cell-hovered-row-background: rgba(79,195,247,0.12);
+  }
+  #stormGrid tr[data-row-id] { cursor: pointer; }
+  .peak-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  .grid-sub { color: var(--muted); font-size: 0.72rem; margin-left: 4px; }
+  label.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.72rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .ring { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1.5px dashed; }
+  .legend .ir-key[hidden] { display: none; }
+  .miss-key { width: 16px; border-top: 2px dotted var(--muted); display: inline-block; }
+  .track-key { width: 18px; border-top: 2px dashed #ff5252; display: inline-block; }
+  .fc-key { width: 18px; border-top: 2px solid var(--text); display: inline-block; }
+  .cone-key { width: 18px; height: 9px; border-radius: 0 9px 9px 0; display: inline-block; background: rgba(147,162,196,0.25); border: 1px solid var(--muted); }
+  .ir-bar {
+    display: inline-block; width: 120px; height: 9px; border-radius: 5px;
+    background: linear-gradient(90deg, #6e747c, #e4e6ea 33%, #78c8ff 40%, #286edc 47%, #28b955 53%, #f5e646 60%, #ff9628 67%, #e62828 73%, #8c141e 79%, #5a0a3c);
+  }
+  .map-wrap { position: relative; }
+  /* Always-visible readout pinned to the map, styled like the hover tooltip; follows the theme. */
+  .fixed-tip {
+    position: absolute; top: 12px; right: 12px; z-index: 5; pointer-events: none;
+    background: var(--tip-bg); border: 1px solid var(--tip-border); border-radius: 8px;
+    padding: 9px 12px; color: var(--tip-text); font-size: 12px; line-height: 1.35;
+    font-variant-numeric: tabular-nums; box-shadow: var(--tip-shadow);
+    display: grid; grid-template-columns: auto auto; gap: 3px 12px; align-items: baseline;
+  }
+  .fixed-tip [hidden] { display: none; }
+  .fixed-tip .k { color: var(--tip-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .fixed-tip .v { font-weight: 700; font-size: 13px; }
+  .fixed-tip .v small { color: var(--tip-muted); font-weight: 500; font-size: 11px; }
+  .fixed-tip .cat { display: inline-flex; align-items: center; gap: 6px; color: var(--tip-cat-text, var(--cat)); }
+  .fixed-tip .cat::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--cat); }
+  footer { margin-top: 14px; color: var(--muted); font-size: 0.72rem; line-height: 1.5; }
+  footer a { color: var(--accent); }
+</style>
+<script>
+  // Theme switch: Auto follows the system setting; Light/Dark are remembered per browser.
+  (function () {
+    var root = document.documentElement;
+    var media = window.matchMedia ? matchMedia('(prefers-color-scheme: light)') : null;
+    try { var saved = localStorage.getItem('hurricane-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+    function systemTheme() { return media && media.matches ? 'light' : 'dark'; }
+    function current() { return root.getAttribute('data-theme') || systemTheme(); }
+    function mode() { return root.getAttribute('data-theme') || 'auto'; }
+    window.hurricaneTheme = current;
+    function announce() { document.dispatchEvent(new Event('themechange')); }
+    document.addEventListener('DOMContentLoaded', function () {
+      var buttons = [].slice.call(document.querySelectorAll('.theme-switch button'));
+      var autoLabel = document.getElementById('autoLabel');
+      function sync() {
+        autoLabel.textContent = 'Auto (' + systemTheme() + ')';
+        buttons.forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-mode') === mode())); });
+      }
+      sync();
+      buttons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          var m = b.getAttribute('data-mode'), before = current();
+          if (m === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', m);
+          try { if (m === 'auto') localStorage.removeItem('hurricane-theme'); else localStorage.setItem('hurricane-theme', m); } catch (e) {}
+          sync();
+          if (current() !== before) announce();
+        });
+      });
+      if (media) {
+        media.addEventListener('change', function () { sync(); if (mode() === 'auto') announce(); });
+      }
+    });
+  })();
+</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>Hurricane Track Playback</h1>
+    <div class="seg theme-switch" role="radiogroup" aria-label="Color theme">
+      <button type="button" role="radio" data-mode="auto" aria-checked="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span id="autoLabel">Auto</span>
+      </button>
+      <button type="button" role="radio" data-mode="light" aria-checked="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        Light
+      </button>
+      <button type="button" role="radio" data-mode="dark" aria-checked="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        Dark
+      </button>
+    </div>
+  </div>
+  <p class="sub">Replay real Atlantic hurricanes from NOAA's best-track record. Storm position, intensity and wind-field size come from the official 6-hourly data, and the storm is drawn at true geographic scale.</p>
+
+  <div class="layout">
+    <div class="map-wrap">
+      <div id="container"></div>
+      <div class="fixed-tip" aria-live="polite">
+        <span class="k">Category</span><span class="v cat" id="statCat">&mdash;</span>
+        <span class="k">Time (UTC)</span><span class="v" id="statTime">&mdash;</span>
+        <span class="k">Wind</span><span class="v" id="statWind">&mdash;</span>
+        <span class="k">Pressure</span><span class="v" id="statPres">&mdash;</span>
+        <span class="k">TS wind span</span><span class="v" id="statDiam">&mdash;</span>
+        <span class="k">Movement</span><span class="v" id="statMove">&mdash;</span>
+        <span class="k">Position</span><span class="v" id="statPos">&mdash;</span>
+        <span class="k fc-row" hidden>NHC forecast</span><span class="v fc-row" id="statFc" hidden>&mdash;</span>
+        <span class="k miss-row" hidden>Day-3 miss</span><span class="v miss-row" id="statMiss" hidden>&mdash;</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <select id="stormSelect" aria-label="Choose a hurricane"></select>
+      </div>
+
+      <div class="row">
+        <button id="playBtn">&#9654; Play</button>
+        <button id="resetBtn" class="secondary">&#8634; Reset</button>
+        <select id="speedSelect" aria-label="Playback speed">
+          <option value="6" selected>Slow &middot; 6 h/s</option>
+          <option value="12">Normal &middot; 12 h/s</option>
+          <option value="24">Fast &middot; 24 h/s</option>
+          <option value="48">Very fast &middot; 48 h/s</option>
+        </select>
+        <input type="range" id="scrubber" min="0" max="0" value="0" step="0.25" aria-label="Storm timeline">
+        <div class="seg" id="styleSwitch" role="radiogroup" aria-label="Satellite view">
+          <button type="button" role="radio" data-style="vis" aria-checked="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H7a5 5 0 1 1 1.1-9.9A6 6 0 0 1 19.5 11a4 4 0 0 1-2 8z"/></svg>
+            Satellite
+          </button>
+          <button type="button" role="radio" data-style="ir" aria-checked="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V4a2 2 0 1 0-4 0v10.76a4 4 0 1 0 4 0z"/></svg>
+            Infrared
+          </button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="windToggle"> Wind field</label>
+        <label class="toggle"><input type="checkbox" id="coneToggle"> Cone</label>
+        <label class="toggle"><input type="checkbox" id="detailToggle"> Forecast details</label>
+      </div>
+
+      <div class="legend">
+        <span><span class="dot" style="background:#8FA8C4"></span>Depression</span>
+        <span><span class="dot" style="background:#4FC3F7"></span>Tropical Storm</span>
+        <span><span class="dot" style="background:#FFC93C"></span>Cat 1</span>
+        <span><span class="dot" style="background:#FF8C42"></span>Cat 2</span>
+        <span><span class="dot" style="background:#F2545B"></span>Cat 3</span>
+        <span><span class="dot" style="background:#E0218A"></span>Cat 4</span>
+        <span><span class="dot" style="background:#C837AB"></span>Cat 5</span>
+        <span><span class="dot" style="background:#A0A8B8"></span>Post-tropical</span>
+        <span><span class="ring" style="border-color:#FFD54F"></span>34 kt winds</span>
+        <span><span class="ring" style="border-color:#FF9F43"></span>50 kt</span>
+        <span><span class="ring" style="border-color:#FF5A5F"></span>64 kt (hurricane force)</span>
+        <span><span class="track-key"></span>Actual track</span>
+        <span><span class="fc-key"></span>NHC forecast track</span>
+        <span><span class="cone-key"></span>NHC forecast cone (as issued)</span>
+        <span><span class="miss-key"></span>Forecast miss</span>
+        <span class="ir-key" id="irKey" hidden>Cloud tops: warm <span class="ir-bar"></span> cold</span>
+      </div>
+
+    </div>
+
+    <div class="grid-panel">
+      <div class="grid-title">Compare storms <span>Click a row to load it on the map &middot; click a column header to sort</span></div>
+      <div id="stormGrid"></div>
+    </div>
+  </div>
+
+  <footer>
+    Data: NOAA National Hurricane Center <a href="https://www.nhc.noaa.gov/data/#hurdat" target="_blank" rel="noopener">HURDAT2 Atlantic best track</a> (file hurdat2-1851-2025-092326). That covers positions, maximum sustained wind, minimum pressure, landfall records, 34/50/64-kt wind radii by quadrant and, from 2021 on, the radius of maximum wind.
+    Positions between the 6-hourly fixes are interpolated.
+    Forecasts: the official NHC forecast in effect at each moment (OFCL, from NHC's <a href="https://ftp.nhc.noaa.gov/atcf/archive/" target="_blank" rel="noopener">ATCF a-deck archive</a>), shown from about 3 hours after its synoptic time, when the advisory was published. The cone is rebuilt from those forecast points using the cone radii NHC published for that season (2005 storms use the earliest archived table, from 2007); NHC's own cone graphics may differ slightly in shape. Dotted lines join each forecast point to where the storm actually was at that time. "Day-3 miss" is the distance between the 72-hour forecast position and the best-track position. The cloud pattern is a stylized rendering rather than satellite imagery: its size comes from the storm's 34-kt wind radius and its eye from the radius of maximum wind (estimated from intensity before 2021). It turns counterclockwise, as Northern Hemisphere storms do.
+    Map: Highcharts Maps &amp; Map Collection. Table: Highcharts Grid Lite.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/highcharts@11.4.8/highmaps.js" onerror="window.__hcLoadError='highmaps.js failed to load from jsdelivr'"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highcharts/grid-lite@3.2.0/grid-lite.js"></script>
+<script>
+(function () {
+  function showError(msg) {
+    document.getElementById('container').innerHTML =
+      '<div style="padding:20px;color:#ff8a8a;font-family:monospace;font-size:13px;white-space:pre-wrap;">' +
+      'Chart failed to initialize:\n' + msg + '</div>';
+  }
+
+  if (window.__hcLoadError) { showError(window.__hcLoadError); return; }
+  if (typeof Highcharts === 'undefined' || !Highcharts.mapChart) {
+    showError('Highcharts Maps did not load (Highcharts.mapChart is unavailable).');
+    return;
+  }
+
+  try {
+
+  var mapData = __MAPDATA__;
+
+  // HURDAT2 best-track records. Each fix is:
+  // [timeUTC, lat, lon, status, windKt, pressureMb, recordId, r34[NE,SE,SW,NW], r50[...], r64[...], rmwNm]
+  // Radii are in nautical miles; -999 means missing.
+  var STORMS = __STORMS__;
+
+  // Official NHC forecasts (OFCL) per storm: [[synoptic time, [[tau h, lat, lon, max wind kt], ...]], ...]
+  var FORECASTS = __OFCL__;
+  // NHC Atlantic cone circle radii (n mi) by lead time, as published for each season.
+  // 2005 uses the earliest archived table (2007); older tables are not archived.
+  var CONE_RADII = __CONE__;
+
+  var NM = 1.852;
+  var CAT_COLORS = ['#FFC93C', '#FF8C42', '#F2545B', '#E0218A', '#C837AB'];
+  var EYE_BY_CAT = [0.5, 0.68, 0.82, 0.93, 1];
+
+  // ---------- Storm data preparation ----------
+
+  function saffirSimpson(wind) {
+    return wind >= 137 ? 5 : wind >= 113 ? 4 : wind >= 96 ? 3 : wind >= 83 ? 2 : 1;
+  }
+
+  // Display label, color, cloud style and eye clarity for one fix.
+  function describe(fix) {
+    switch (fix.status) {
+      case 'HU':
+        var c = saffirSimpson(fix.wind);
+        return { label: 'Category ' + c, short: 'Cat ' + c, color: CAT_COLORS[c - 1],
+          variant: 'c' + c, eye: EYE_BY_CAT[c - 1] };
+      case 'TS': return { label: 'Tropical Storm', short: 'TS', color: '#4FC3F7', variant: 'ts', eye: 0 };
+      case 'SS': return { label: 'Subtropical Storm', short: 'SS', color: '#4FC3F7', variant: 'ts', eye: 0 };
+      case 'TD': return { label: 'Tropical Depression', short: 'TD', color: '#8FA8C4', variant: 'td', eye: 0 };
+      case 'SD': return { label: 'Subtropical Depression', short: 'SD', color: '#8FA8C4', variant: 'td', eye: 0 };
+      case 'EX': return { label: 'Post-tropical', short: 'EX', color: '#A0A8B8', variant: 'ex', eye: 0 };
+      case 'LO': return { label: 'Remnant Low', short: 'LO', color: '#A0A8B8', variant: 'ex', eye: 0 };
+      case 'WV': return { label: 'Tropical Wave', short: 'WV', color: '#A0A8B8', variant: 'td', eye: 0 };
+      default:   return { label: 'Disturbance', short: 'DB', color: '#A0A8B8', variant: 'td', eye: 0 };
+    }
+  }
+
+  function meanRadiusNm(q) {
+    if (!q || q[0] < 0) return null;
+    var sum = q[0] + q[1] + q[2] + q[3];
+    return sum > 0 ? sum / 4 : null;
+  }
+
+  // ---------- Smooth track (centripetal Catmull-Rom spline through the fixes) ----------
+  // Map lines are drawn point-to-point, so the curve is sampled into short segments.
+  // The centripetal form passes through every fix without overshooting or looping,
+  // even where fixes are very close together (e.g. a landfall record minutes before a 6-hourly fix).
+
+  function knot(a, b) {
+    var dx = (b.lon - a.lon) * Math.cos((a.lat + b.lat) * Math.PI / 360), dy = b.lat - a.lat;
+    return Math.max(Math.sqrt(Math.sqrt(dx * dx + dy * dy)), 1e-3);
+  }
+
+  function mix(p, q, wp, wq) { return { lon: p.lon * wp + q.lon * wq, lat: p.lat * wp + q.lat * wq }; }
+
+  // Point at fraction t (0..1) of the segment from fix k to fix k + 1.
+  function splinePoint(fx, k, t) {
+    var p1 = fx[k], p2 = fx[Math.min(k + 1, fx.length - 1)];
+    var p0 = k > 0 ? fx[k - 1] : { lon: 2 * p1.lon - p2.lon, lat: 2 * p1.lat - p2.lat };
+    var p3 = k + 2 < fx.length ? fx[k + 2] : { lon: 2 * p2.lon - p1.lon, lat: 2 * p2.lat - p1.lat };
+    var t0 = 0, t1 = t0 + knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3);
+    var u = t1 + (t2 - t1) * t;
+    var a1 = mix(p0, p1, (t1 - u) / (t1 - t0), (u - t0) / (t1 - t0));
+    var a2 = mix(p1, p2, (t2 - u) / (t2 - t1), (u - t1) / (t2 - t1));
+    var a3 = mix(p2, p3, (t3 - u) / (t3 - t2), (u - t2) / (t3 - t2));
+    var b1 = mix(a1, a2, (t2 - u) / (t2 - t0), (u - t0) / (t2 - t0));
+    var b2 = mix(a2, a3, (t3 - u) / (t3 - t1), (u - t1) / (t3 - t1));
+    return mix(b1, b2, (t2 - u) / (t2 - t1), (u - t1) / (t2 - t1));
+  }
+
+  // Sampled coordinates for segment k from t = 0 to t = tEnd.
+  function splineCoords(fx, k, tEnd) {
+    var a = fx[k], b = fx[Math.min(k + 1, fx.length - 1)];
+    var n = Math.max(1, Math.min(16, Math.ceil(Math.hypot(b.lon - a.lon, b.lat - a.lat) * 4 * tEnd)));
+    var out = [];
+    for (var j = 0; j <= n; j++) {
+      var p = splinePoint(fx, k, tEnd * j / n);
+      out.push([p.lon, p.lat]);
+    }
+    return out;
+  }
+
+  STORMS.forEach(function (s) {
+    s.fixes = s.pts.map(function (p) {
+      var fix = {
+        time: Date.parse(p[0]), lat: p[1], lon: p[2], status: p[3], wind: p[4],
+        pres: p[5] > 0 ? p[5] : null, landfall: p[6] === 'L',
+        r34: p[7], r50: p[8], r64: p[9]
+      };
+      fix.info = describe(fix);
+
+      var r34 = meanRadiusNm(fix.r34);
+      fix.r34Km = r34 ? r34 * NM : null;
+      // Without tropical-storm-force winds there is no wind radius; draw a small, honest-looking blob.
+      fix.cloudKm = Math.max(fix.r34Km || (fix.info.variant === 'ex' ? 160 : 75), 60) * 1.3;
+
+      fix.rmwKm = (p[10] > 0 ? p[10] : (fix.wind >= 113 ? 15 : fix.wind >= 96 ? 18 : 24)) * NM;
+      return fix;
+    });
+    var t0 = s.fixes[0].time;
+    s.fixes.forEach(function (f) { f.h = (f.time - t0) / 3600000; });
+    s.totalH = s.fixes[s.fixes.length - 1].h;
+    s.peak = s.fixes.reduce(function (a, f) { return f.wind > a.wind ? f : a; });
+    s.minPres = Math.min.apply(null, s.fixes.map(function (f) { return f.pres || 9999; }));
+    s.landfalls = s.fixes.filter(function (f) { return f.landfall; }).length;
+    s.curves = [];
+    for (var k = 0; k < s.fixes.length - 1; k++) s.curves.push(splineCoords(s.fixes, k, 1));
+  });
+
+  // ---------- Geo helpers ----------
+
+  function lerp(a, b, f) { return a + (b - a) * f; }
+
+
+  function haversineKm(a, b) {
+    var R = 6371, toR = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function bearingDeg(a, b) {
+    var toR = Math.PI / 180;
+    var y = Math.sin((b.lon - a.lon) * toR) * Math.cos(b.lat * toR);
+    var x = Math.cos(a.lat * toR) * Math.sin(b.lat * toR) -
+      Math.sin(a.lat * toR) * Math.cos(b.lat * toR) * Math.cos((b.lon - a.lon) * toR);
+    return (Math.atan2(y, x) / toR + 360) % 360;
+  }
+
+  function compass(deg) {
+    var pts = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return pts[Math.round(deg / 22.5) % 16];
+  }
+
+  function destination(lat, lon, bearing, km) {
+    var toR = Math.PI / 180, d = km / 6371, b = bearing * toR;
+    var la1 = lat * toR, lo1 = lon * toR;
+    var la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(b));
+    var lo2 = lo1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+    return [lo2 / toR, la2 / toR];
+  }
+
+  // Quadrant wind radii (NE, SE, SW, NW in nm) -> GeoJSON polygon ring.
+  function windRing(lat, lon, quads) {
+    var ring = [];
+    for (var q = 0; q < 4; q++) {
+      var km = quads[q] * NM;
+      for (var b = q * 90; b <= (q + 1) * 90; b += 6) ring.push(destination(lat, lon, b, km));
+    }
+    ring.push(ring[0]);
+    return ring;
+  }
+
+  // ---------- Procedural satellite-style cloud shield ----------
+
+  // Small seeded value-noise / fBm, enough for cloud texture.
+  function makeNoise(seed) {
+    var perm = new Uint8Array(512), vals = new Float32Array(256), s = seed;
+    function rnd() { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }
+    for (var i = 0; i < 256; i++) { perm[i] = i; vals[i] = rnd(); }
+    for (i = 255; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+    for (i = 0; i < 256; i++) perm[i + 256] = perm[i];
+    function lattice(x, y) { return vals[perm[perm[x & 255] + (y & 255)]]; }
+    function smooth(t) { return t * t * (3 - 2 * t); }
+    function noise(x, y) {
+      var xi = Math.floor(x), yi = Math.floor(y), xf = smooth(x - xi), yf = smooth(y - yi);
+      var a = lattice(xi, yi), b = lattice(xi + 1, yi), c = lattice(xi, yi + 1), d = lattice(xi + 1, yi + 1);
+      return lerp(lerp(a, b, xf), lerp(c, d, xf), yf);
+    }
+    return function fbm(x, y, oct) {
+      var sum = 0, amp = 0.5, norm = 0;
+      for (var o = 0; o < oct; o++) { sum += amp * noise(x, y); norm += amp; x *= 2.03; y *= 2.03; amp *= 0.5; }
+      return sum / norm;
+    };
+  }
+
+  function smoothstep(a, b, x) { var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+
+  // Cloud styles per storm organization: twist = how tightly bands wrap, cdo = dense central overcast,
+  // cold = how cold (high) the cloud tops get, which drives the infrared colors.
+  var CLOUD_STYLES = {
+    td:    { twist: 0.9, arms: 2, warp: 5.0, sharp: 1.6, cdo: 0.55, cdoR: 0.30, band: 0.75, env: 0.35, fine: 0.2,  cold: 0.55, core: 0.14, bandW: 0.9,  seed: 11 },
+    ts:    { twist: 1.6, arms: 3, warp: 3.5, sharp: 2.0, cdo: 0.85, cdoR: 0.32, band: 0.9,  env: 0.45, fine: 0.3,  cold: 0.74, core: 0.24, bandW: 0.8,  seed: 23 },
+    // One style per Saffir-Simpson category. Category is wind-only, so these ramp what actually tracks
+    // intensity in imagery: a bigger, more solid and symmetric core, colder (redder) tops, fewer bands.
+    // Cat 5 is close to "annular": almost band-less, a fat ring of the coldest tops around a clear eye.
+    c1:    { twist: 2.0, arms: 3, warp: 3.0, sharp: 2.1, cdo: 0.95, cdoR: 0.38, band: 0.95, env: 0.52, fine: 0.35, cold: 0.82, core: 0.30, bandW: 0.72, seed: 31 },
+    c2:    { twist: 2.2, arms: 3, warp: 2.8, sharp: 2.2, cdo: 1.0,  cdoR: 0.42, band: 0.95, env: 0.55, fine: 0.35, cold: 0.88, core: 0.36, bandW: 0.62, seed: 37 },
+    c3:    { twist: 2.35, arms: 3, warp: 2.6, sharp: 2.3, cdo: 1.0, cdoR: 0.46, band: 0.92, env: 0.58, fine: 0.33, cold: 0.93, core: 0.42, bandW: 0.52, seed: 41 },
+    c4:    { twist: 2.5, arms: 2, warp: 2.4, sharp: 2.4, cdo: 1.0,  cdoR: 0.50, band: 0.9,  env: 0.60, fine: 0.3,  cold: 0.98, core: 0.48, bandW: 0.42, seed: 43 },
+    c5:    { twist: 2.6, arms: 2, warp: 2.0, sharp: 2.6, cdo: 1.0,  cdoR: 0.56, band: 0.85, env: 0.64, fine: 0.25, cold: 1.06, core: 0.56, bandW: 0.28, seed: 47 },
+    ex:    { twist: 1.0, arms: 1, warp: 4.0, sharp: 1.4, cdo: 0.35, cdoR: 0.25, band: 0.85, env: 0.30, fine: 0.25, cold: 0.48, core: 0.1,  bandW: 0.9,  seed: 53, comma: true }
+  };
+
+  // Enhanced-infrared color scale (cloud-top coldness 0 = warm/low, 1 = coldest/highest), like TV satellite loops.
+  var IR_SCALE = [
+    [0.00, 120, 124, 130, 0], [0.10, 150, 154, 160, 0.5], [0.22, 205, 208, 212, 0.85], [0.32, 245, 246, 248, 1],
+    [0.39, 110, 215, 245, 1], [0.46, 40, 125, 225, 1], [0.53, 30, 190, 90, 1], [0.61, 170, 225, 70, 1],
+    [0.67, 250, 230, 60, 1], [0.75, 255, 155, 45, 1], [0.84, 240, 55, 40, 1], [0.92, 175, 20, 30, 1], [1.00, 80, 8, 20, 1]
+  ];
+  function irColor(v) {
+    for (var i = 1; i < IR_SCALE.length; i++) {
+      if (v <= IR_SCALE[i][0]) {
+        var a = IR_SCALE[i - 1], b = IR_SCALE[i], f = (v - a[0]) / (b[0] - a[0]);
+        return [lerp(a[1], b[1], f), lerp(a[2], b[2], f), lerp(a[3], b[3], f), lerp(a[4], b[4], f)];
+      }
+    }
+    var l = IR_SCALE[IR_SCALE.length - 1];
+    return [l[1], l[2], l[3], l[4]];
+  }
+
+  // Renders the cloud shield with Northern Hemisphere (counterclockwise) banding, three ways:
+  // a shaded visible-light image, an enhanced-infrared image, and a soft shadow for the light map.
+  function renderCloud(style) {
+    var S = 480, c = S / 2;
+    var fbm = makeNoise(style.seed);
+    var dens = new Float32Array(S * S), cold = new Float32Array(S * S), cover = new Float32Array(S * S);
+
+    for (var y = 0; y < S; y++) {
+      for (var x = 0; x < S; x++) {
+        var dx = (x + 0.5 - c) / c, dy = (c - y - 0.5) / c;   // dy points north (math orientation)
+        var r = Math.sqrt(dx * dx + dy * dy);
+        if (r >= 1) continue;
+        var th = Math.atan2(dy, dx);
+        // Logarithmic spiral coordinate: constant along a band. Going outward the band trails
+        // clockwise, so the whole pattern reads as a counterclockwise (NH) cyclone.
+        var s = th + style.twist * Math.log(r + 0.03);
+        var ux = r * Math.cos(s) * 3.2, uy = r * Math.sin(s) * 3.2;   // "unwound" coords: texture follows the swirl
+        var n1 = fbm(ux + 7.3, uy + 3.1, 5);
+        var n2 = fbm(dx * 11 + 40, dy * 11 + 40, 4);
+        // Fibers: noise that changes quickly across the bands and slowly along them -> streaky cirrus.
+        var fib = fbm(Math.cos(s) * 8 + r * 2.2 + n1 * 1.5, Math.sin(s) * 8 - r * 1.3, 4);
+        var cells = fbm(dx * 7 + 90, dy * 7 + 90, 3);   // convective towers (coldest tops)
+
+        var band = Math.pow(0.5 + 0.5 * Math.cos(style.arms * s + (n1 - 0.5) * style.warp), style.sharp);
+        var env = 1 - smoothstep(style.env, 1.0, r + (n1 - 0.5) * 0.3);
+        var cdo = Math.exp(-Math.pow(r / style.cdoR, 2.2)) * style.cdo;
+        // Thinner secondary bands and a faint cirrus veil break up the clean "galaxy" arms.
+        var fine = Math.pow(0.5 + 0.5 * Math.cos(style.arms * 2 * s + n1 * 7), 3) * style.fine * env;
+        var haze = 0.16 * (1 - smoothstep(0.25, 0.95, r));
+        var cirrus = smoothstep(0.3, 0.65, r) * (1 - smoothstep(0.7, 1.0, r)) * fib * fib * 0.32;
+        var texture = 0.45 + 0.95 * n2;
+        texture += (1 - texture) * cdo * 0.75;   // keep the central overcast evenly bright around the eye
+        var bandD = band * env * style.band * (0.78 + 0.44 * fib) + fine;
+        var d = Math.max(cdo, bandD, haze, cirrus) * texture;
+        if (style.comma) d *= 0.45 + 0.55 * (0.5 + 0.5 * Math.cos(th - 0.6 - r * 2.2));
+        d *= 1 - smoothstep(0.86, 1.0, r);
+        d = Math.max(0, Math.min(1, d * 1.15));
+
+        var idx = y * S + x;
+        dens[idx] = d;
+        // Infrared structure, modeled on enhanced-IR imagery: a large, nearly solid central overcast whose
+        // cloud tops warm steadily outward (red -> orange -> yellow -> green -> blue), with spiral banding
+        // only in the outer part, mottled convective texture, and a ragged grey-white fringe.
+        var spI = Math.pow(0.5 + 0.5 * Math.cos(style.arms * s + (n1 - 0.5) * style.warp), 1.4);
+        var wB = smoothstep(style.core * 0.6, style.core + 0.45, r) * style.bandW;
+        var rad = 1 - Math.pow(r, 1.5) * 0.85;
+        var mott = fbm(dx * 24 + 13, dy * 24 + 7, 3);
+        var coreC = 1 - smoothstep(style.core, style.core + 0.3, r + (n1 - 0.5) * 0.2);
+        var bandC = spI * (1 - smoothstep(0.72, 1.0, r + (n1 - 0.5) * 0.3));
+        var veil = 0.5 * (1 - smoothstep(0.5, 0.95, r + (n1 - 0.5) * 0.3));
+        var cov = Math.max(coreC, bandC * 0.95, veil) * (1 - smoothstep(0.9, 1.0, r));
+        if (style.comma) cov *= 0.4 + 0.6 * (0.5 + 0.5 * Math.cos(th - 0.6 - r * 2.2));
+        var k = style.cold * rad * (1 - wB + wB * (0.35 + 0.75 * spI)) +
+          (cells - 0.5) * 0.28 * (1 - r) * smoothstep(0.08, 0.3, r) + (mott - 0.5) * 0.14;
+        k *= 0.45 + 0.55 * Math.max(coreC, bandC);   // gaps between bands show lower, warmer cloud
+        cold[idx] = Math.max(0, Math.min(1, k));
+        cover[idx] = Math.max(0, Math.min(1, cov));
+      }
+    }
+
+    function canvasOf(fill) {
+      var cv = document.createElement('canvas');
+      cv.width = cv.height = S;
+      var cx = cv.getContext('2d'), im = cx.createImageData(S, S);
+      fill(im.data);
+      cx.putImageData(im, 0, 0);
+      return cv;
+    }
+
+    // Visible: brightness from thickness, plus relief shading lit from the upper left.
+    var vis = canvasOf(function (px) {
+      for (var y = 1; y < S - 1; y++) {
+        for (var x = 1; x < S - 1; x++) {
+          var i = y * S + x, d = dens[i];
+          if (d <= 0) continue;
+          var gx = dens[i + 1] - dens[i - 1], gy = dens[i + S] - dens[i - S];
+          var shade = Math.max(-30, Math.min(24, (gx * 0.55 + gy * 0.55) * 650));
+          var lum = 150 + 105 * Math.pow(d, 0.6) + shade;
+          var o = i * 4;
+          px[o] = Math.min(255, lum + 2); px[o + 1] = Math.min(255, lum + 3);
+          px[o + 2] = Math.min(255, lum + 8 + 10 * (1 - d));          // thin cloud slightly blue-grey
+          px[o + 3] = Math.round(255 * Math.pow(d, 0.85));
+        }
+      }
+    });
+
+    var ir = canvasOf(function (px) {
+      for (var i = 0; i < S * S; i++) {
+        if (cover[i] <= 0) continue;
+        var col = irColor(cold[i]), o = i * 4;
+        px[o] = col[0]; px[o + 1] = col[1]; px[o + 2] = col[2];
+        px[o + 3] = Math.round(255 * col[3] * cover[i]);
+      }
+    });
+
+    // Shadow: the same cloud alpha, softened by stacking offset copies, then filled dark.
+    // Used on the light map so white cloud edges still separate from the pale background.
+    var sh = document.createElement('canvas');
+    sh.width = sh.height = S;
+    var sctx = sh.getContext('2d');
+    var taps = 16;
+    sctx.globalAlpha = 1.6 / taps;
+    for (var ring = 1; ring <= 2; ring++) {
+      for (var t = 0; t < taps / 2; t++) {
+        var a = t / (taps / 2) * Math.PI * 2 + ring;
+        sctx.drawImage(vis, Math.cos(a) * ring * 5, Math.sin(a) * ring * 5);
+      }
+    }
+    sctx.globalAlpha = 1;
+    sctx.globalCompositeOperation = 'source-in';
+    sctx.fillStyle = 'rgb(28,48,78)';
+    sctx.fillRect(0, 0, S, S);
+
+    return { cloud: vis.toDataURL('image/png'), ir: ir.toDataURL('image/png'), shadow: sh.toDataURL('image/png') };
+  }
+
+  // ---------- Chart ----------
+
+  var chart = Highcharts.mapChart('container', {
+    chart: { backgroundColor: 'transparent', animation: false, spacing: [0, 0, 0, 0] },
+    title: { text: null },
+    credits: { enabled: false },
+    legend: { enabled: false },
+    mapNavigation: { enabled: true, enableMouseWheelZoom: true, buttonOptions: { verticalAlign: 'bottom' } },
+    mapView: { projection: { name: 'WebMercator' } },
+    plotOptions: { series: { animation: false, states: { inactive: { opacity: 1 } } } },
+    tooltip: {
+      backgroundColor: 'rgba(10,20,38,0.92)', borderColor: '#2b3d63', borderRadius: 8,
+      style: { color: '#e8edf7', fontSize: '12px' }, useHTML: true,
+      formatter: function () {
+        var f = storm.fixes[this.point.options.fi];
+        return '<b>' + fmtTime(f.time) + ' UTC ' + storm.year + '</b><br>' +
+          '<span style="color:' + f.info.color + '">●</span> ' + f.info.label +
+          (f.landfall ? ' &middot; <b>Landfall</b>' : '') + '<br>' +
+          f.wind + ' kt (' + Math.round(f.wind * 1.15078) + ' mph)' + (f.pres ? ' &middot; ' + f.pres + ' mb' : '');
+      }
+    },
+    series: [
+      {
+        name: 'Land', mapData: mapData, data: [], zIndex: 0,
+        nullColor: '#1f3045', borderColor: 'rgba(170,190,220,0.4)', borderWidth: 0.5,
+        enableMouseTracking: false
+      },
+      {
+        type: 'mapline', name: 'Full track', data: [], zIndex: 2,
+        lineWidth: 2, color: 'rgba(255,82,82,0.85)', dashStyle: 'ShortDash', enableMouseTracking: false
+      },
+      {
+        type: 'map', name: 'Wind field', data: [], zIndex: 8, allAreas: false,
+        borderWidth: 1.4, dashStyle: 'ShortDash', enableMouseTracking: false
+      },
+      {
+        type: 'mapline', name: 'Path traveled', data: [], zIndex: 5, lineWidth: 3, enableMouseTracking: false
+      },
+      {
+        type: 'mappoint', name: 'Fixes', data: [], zIndex: 6,
+        marker: { symbol: 'circle', radius: 3.2, lineWidth: 1, lineColor: 'rgba(6,20,42,0.9)' },
+        dataLabels: { enabled: false }, stickyTracking: false,
+        states: { hover: { halo: { size: 6 } } }
+      },
+      {
+        type: 'mappoint', name: 'Landfall', data: [], zIndex: 9,
+        marker: { symbol: 'circle', radius: 7, fillColor: 'rgba(0,0,0,0)', lineWidth: 2, lineColor: '#ffffff' },
+        dataLabels: { enabled: false }, stickyTracking: false
+      },
+      {
+        type: 'map', name: 'Cone', data: [], zIndex: 1, allAreas: false,
+        borderWidth: 1.2, enableMouseTracking: false
+      },
+      {
+        type: 'mapline', name: 'Forecast track', data: [], zIndex: 4, lineWidth: 1.6,
+        color: 'rgba(255,255,255,0.85)', enableMouseTracking: false
+      },
+      {
+        type: 'mapline', name: 'Forecast miss', data: [], zIndex: 4, lineWidth: 1,
+        color: 'rgba(255,255,255,0.6)', dashStyle: 'Dot', enableMouseTracking: false
+      },
+      {
+        type: 'mappoint', name: 'Forecast points', data: [], zIndex: 10, enableMouseTracking: false,
+        marker: { symbol: 'circle', radius: 5, lineWidth: 1.5, lineColor: '#ffffff' },
+        dataLabels: {
+          enabled: true, allowOverlap: false, y: -8, useHTML: false,
+          formatter: function () { return this.point.options.label || null; },
+          style: { fontSize: '10.5px', fontWeight: '600', color: '#ffffff', textOutline: '2.5px rgba(6,20,42,0.92)' }
+        }
+      }
+    ]
+  });
+
+  var S_TRACK = 1, S_WIND = 2, S_PATH = 3, S_FIXES = 4, S_LANDFALL = 5, S_CONE = 6, S_FTRACK = 7, S_MISS = 8, S_FCST = 9;
+
+  // Storm graphic lives inside the series group so it can sit above the track and below the wind rings.
+  // Drawn in a unit space of radius 100, then scaled to the true on-screen size.
+  var ren = chart.renderer;
+  var clip = ren.clipRect(chart.plotLeft, chart.plotTop, chart.plotWidth, chart.plotHeight);
+  // The clip lives on an untransformed parent; clip-paths are resolved in the element's own (moved/scaled) space.
+  var clipG = ren.g('storm-clip').attr({ zIndex: 7, 'pointer-events': 'none' }).clip(clip).add(chart.seriesGroup);
+  var stormG = ren.g('storm').add(clipG);
+  var bodyG = ren.g().add(stormG);
+  var spinG = ren.g().add(bodyG);
+  // Cloud images are drawn on demand (about 0.14 s per style); the rest are drawn in the background.
+  var cloudImgs = {};
+  // Each style comes in LOOKS variations: look 0 is the base, the others get a new random cloud
+  // pattern plus small, seeded tweaks to band count, spiral tightness, core size and coldness.
+  var LOOKS = 3;
+  function styleFor(key) {
+    var parts = key.split('#'), base = CLOUD_STYLES[parts[0]], look = +parts[1] || 0;
+    if (!look) return base;
+    var seed = base.seed * 7919 + look * 104729;
+    function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+    function jitter(v, amount) { return v * (1 + (rnd() * 2 - 1) * amount); }
+    var st = {};
+    Object.keys(base).forEach(function (k) { st[k] = base[k]; });
+    st.seed = base.seed + look * 101;
+    st.twist = jitter(base.twist, 0.12);
+    st.warp = jitter(base.warp, 0.2);
+    st.core = jitter(base.core, 0.1);
+    st.cdoR = jitter(base.cdoR, 0.08);
+    st.bandW = Math.min(1, jitter(base.bandW, 0.2));
+    st.cold = jitter(base.cold, 0.025);
+    if (rnd() < 0.5) st.arms = base.arms === 2 ? 3 : base.arms === 3 ? 2 : base.arms;
+    return st;
+  }
+
+  // Which look a storm uses for a style: fixed per storm, so a storm always looks the same.
+  function lookKey(s, variant) {
+    var h = 0, str = s.id + variant;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return variant + '#' + (h % LOOKS);
+  }
+
+  function ensureStyle(k) {
+    if (cloudImgs[k]) return cloudImgs[k];
+    var img = renderCloud(styleFor(k));
+    cloudImgs[k] = {
+      shadow: ren.image(img.shadow, -100, -100, 200, 200).attr({ opacity: 0 }).add(spinG),
+      el: ren.image(img.cloud, -100, -100, 200, 200).attr({ opacity: 0 }).add(spinG),
+      ir: ren.image(img.ir, -100, -100, 200, 200).attr({ opacity: 0 }).add(spinG),
+      cur: 0, target: 0
+    };
+    return cloudImgs[k];
+  }
+  // Background-draw the looks the current storm will need. A new storm restarts the queue.
+  var prefetchToken = 0;
+  function prefetchStyles() {
+    var token = ++prefetchToken;
+    (function step() {
+      if (token !== prefetchToken || !storm) return;
+      var next = Object.keys(CLOUD_STYLES).map(function (v) { return lookKey(storm, v); })
+        .filter(function (k) { return !cloudImgs[k]; })[0];
+      if (!next) return;
+      ensureStyle(next);
+      setTimeout(step, 60);
+    })();
+  }
+  // Eye: clear center showing the ocean, then a bright eyewall ring that fades into the cloud shield.
+  var eye = ren.circle(0, 0, 10).attr({ opacity: 0 }).add(bodyG);
+
+
+  // ---------- Map theme (follows the page's light/dark toggle) ----------
+
+  var MAP_THEMES = {
+    dark: {
+      land: '#1f3045', border: 'rgba(170,190,220,0.4)', track: 'rgba(255,82,82,0.85)', miss: 'rgba(255,255,255,0.6)',
+      cone: { fill: 'rgba(255,255,255,0.13)', line: 'rgba(255,255,255,0.6)', track: 'rgba(255,255,255,0.85)', label: '#ffffff', outline: 'rgba(6,20,42,0.92)' },
+      fixLine: 'rgba(6,20,42,0.9)', ring: '#ffffff', shadow: 0, eyeCore: ['rgba(6,22,44,0.98)', 'rgba(12,34,62,0.93)'],
+      tip: { bg: 'rgba(10,20,38,0.92)', border: '#2b3d63', text: '#e8edf7' }
+    },
+    light: {
+      land: '#e3dfd3', border: 'rgba(80,95,120,0.5)', track: 'rgba(205,30,40,0.85)', miss: 'rgba(25,40,65,0.55)',
+      cone: { fill: 'rgba(30,50,85,0.12)', line: 'rgba(30,50,85,0.55)', track: 'rgba(20,32,55,0.85)', label: '#0f172a', outline: 'rgba(255,255,255,0.95)' },
+      fixLine: 'rgba(255,255,255,0.95)', ring: '#1c2a40', shadow: 0.55, eyeCore: ['rgba(44,78,116,0.96)', 'rgba(58,94,134,0.9)'],
+      tip: { bg: 'rgba(255,255,255,0.96)', border: '#cbd6e8', text: '#0f172a' }
+    }
+  };
+  var mapTheme = MAP_THEMES.dark;
+
+  // Satellite style: 'ir' (enhanced infrared, default) or 'vis' (visible light). Remembered per browser.
+  var satStyle = 'ir';
+  try { if (localStorage.getItem('hurricane-sat') === 'vis') satStyle = 'vis'; } catch (e) {}
+  var styleButtons = [].slice.call(document.querySelectorAll('#styleSwitch button'));
+  function syncStyle() {
+    styleButtons.forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-style') === satStyle)); });
+    document.getElementById('irKey').hidden = satStyle !== 'ir';
+  }
+  styleButtons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      satStyle = b.getAttribute('data-style');
+      try { localStorage.setItem('hurricane-sat', satStyle); } catch (e) {}
+      syncStyle();
+      applyMapTheme();
+    });
+  });
+  syncStyle();
+
+  function applyMapTheme() {
+    mapTheme = MAP_THEMES[window.hurricaneTheme && window.hurricaneTheme() === 'light' ? 'light' : 'dark'];
+    var m = mapTheme;
+    chart.series[0].update({ nullColor: m.land, borderColor: m.border }, false);
+    chart.series[S_TRACK].update({ color: m.track }, false);
+    chart.series[S_MISS].update({ color: m.miss }, false);
+    chart.series[S_FIXES].update({ marker: { lineColor: m.fixLine } }, false);
+    chart.series[S_LANDFALL].update({ marker: { lineColor: m.ring } }, false);
+    chart.series[S_FCST].update({ dataLabels: { style: { color: m.cone.label, textOutline: '2.5px ' + m.cone.outline } } }, false);
+    chart.series[S_FTRACK].update({ color: m.cone.track }, false);
+    themeConeDirty = true;
+    dirty = true;   // re-color the cone
+    chart.update({ tooltip: { backgroundColor: m.tip.bg, borderColor: m.tip.border, style: { color: m.tip.text } } }, false);
+    // Visible: the eye shows the ocean inside a bright white eyewall.
+    // Infrared: the eye is warm (grey) inside the coldest, darkest-red eyewall tops.
+    eye.attr({
+      fill: {
+        radialGradient: { cx: 0.5, cy: 0.5, r: 0.5 },
+        stops: satStyle === 'ir' ? [
+          [0, 'rgba(6,6,10,1)'], [0.44, 'rgba(12,12,18,1)'], [0.49, 'rgba(190,190,198,0.9)'],
+          [0.54, 'rgba(60,4,14,1)'], [0.68, 'rgba(130,12,24,0.95)'], [0.84, 'rgba(185,26,30,0.5)'], [1, 'rgba(220,40,40,0)']
+        ] : [
+          [0, m.eyeCore[0]], [0.42, m.eyeCore[1]], [0.56, 'rgba(150,168,190,0.8)'],
+          [0.66, 'rgba(255,255,255,1)'], [0.8, 'rgba(246,249,253,0.7)'], [1, 'rgba(240,244,250,0)']
+        ]
+      }
+    });
+    themeDirty = true;
+    chart.redraw(false);
+  }
+
+  applyMapTheme();
+  document.addEventListener('themechange', applyMapTheme);
+
+  // ---------- State ----------
+
+  var stormSelect = document.getElementById('stormSelect');
+  var scrubber = document.getElementById('scrubber');
+  var playBtn = document.getElementById('playBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var speedSelect = document.getElementById('speedSelect');
+  var windToggle = document.getElementById('windToggle');
+  var coneToggle = document.getElementById('coneToggle');      // cone shape only
+  var detailToggle = document.getElementById('detailToggle');  // forecast track, dated points, miss lines
+  function forecastOn() { return coneToggle.checked || detailToggle.checked; }
+  var el = {
+    time: document.getElementById('statTime'), cat: document.getElementById('statCat'),
+    wind: document.getElementById('statWind'), pres: document.getElementById('statPres'),
+    move: document.getElementById('statMove'), diam: document.getElementById('statDiam'),
+    pos: document.getElementById('statPos'), fc: document.getElementById('statFc'), miss: document.getElementById('statMiss')
+  };
+
+  var storm = null, t = 0, state = null, playing = false, dirty = true, lastFixIdx = -1;
+  var angle = 0, eyeCur = 0, stormCur = 1, themeDirty = true, shownForecast, themeConeDirty = true;
+
+  function fmtTime(ms) {
+    var d = new Date(ms);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) + ' ' +
+      d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+  }
+
+  // Interpolated storm state at hour h since genesis.
+  function stateAt(s, h) {
+    var fx = s.fixes, i = 0;
+    while (i < fx.length - 2 && fx[i + 1].h <= h) i++;
+    var a = fx[i], b = fx[Math.min(i + 1, fx.length - 1)];
+    var f = b.h > a.h ? Math.max(0, Math.min(1, (h - a.h) / (b.h - a.h))) : 0;
+    if (f >= 1) { i = Math.min(i + 1, fx.length - 1); a = b; f = 0; }
+    var quad = function (k) {
+      if (a[k][0] < 0 || b[k][0] < 0) return a[k][0] < 0 ? null : a[k];
+      return a[k].map(function (v, q) { return lerp(v, b[k][q], f); });
+    };
+    var pos = i < fx.length - 1 ? splinePoint(fx, i, f) : a;   // follow the smoothed track
+    return {
+      i: i, fix: a, next: b, f: f,
+      time: lerp(a.time, b.time, f), lat: pos.lat, lon: pos.lon,
+      cloudKm: lerp(a.cloudKm, b.cloudKm, f), rmwKm: lerp(a.rmwKm, b.rmwKm, f),
+      eye: lerp(a.info.eye, b.info.eye, f), wind: lerp(a.wind, b.wind, f),
+      r34: quad('r34'), r50: quad('r50'), r64: quad('r64')
+    };
+  }
+
+  // Real-world km at (lon, lat) -> on-screen pixels, using the live map projection.
+  function kmToPixels(lon, lat, km) {
+    var mv = chart.mapView;
+    var deltaLon = km / (111.32 * Math.cos(lat * Math.PI / 180));
+    var p1 = mv.projectedUnitsToPixels(mv.lonLatToProjectedUnits({ lon: lon, lat: lat }));
+    var p2 = mv.projectedUnitsToPixels(mv.lonLatToProjectedUnits({ lon: lon + deltaLon, lat: lat }));
+    var r = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+    return isFinite(r) ? r : 0;
+  }
+
+  function positionStorm() {
+    if (!state || !chart.mapView) return;
+    var mv = chart.mapView;
+    var p = mv.projectedUnitsToPixels(mv.lonLatToProjectedUnits({ lon: state.lon, lat: state.lat }));
+    var scale = Math.max(kmToPixels(state.lon, state.lat, state.cloudKm), 9) / 100;
+    stormG.attr({ translateX: chart.plotLeft + p.x, translateY: chart.plotTop + p.y, scaleX: scale, scaleY: scale });
+    // Eyewall peak sits at ~0.66 of the eye graphic's radius -> place it on the radius of maximum wind.
+    // Keep at least a few pixels of eye so it stays visible when zoomed far out.
+    eye.attr({ r: Math.min(45, Math.max(100 * (state.rmwKm / 0.66) / state.cloudKm, 6 / scale)) });
+    clip.attr({ x: chart.plotLeft, y: chart.plotTop, width: chart.plotWidth, height: chart.plotHeight });
+  }
+
+  Highcharts.addEvent(chart, 'render', positionStorm);
+
+
+  // ---------- Official NHC forecasts and cone (as issued) ----------
+  // Each advisory's official forecast (OFCL) comes from NHC's ATCF a-deck archive: positions and
+  // max wind at 0-120 h from the forecast's synoptic time. The advisory is published ~3 h later.
+  // The cone is built the way NHC builds it: circles around each forecast point whose radii are
+  // that season's published 2/3-probability values, joined into one shape.
+  var ISSUE_DELAY_H = 3;
+  var STALE_AFTER_H = 9;     // advisories come every 6 h; after the last one the cone disappears
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  STORMS.forEach(function (s) {
+    var t0 = s.fixes[0].time;
+    var radii = CONE_RADII[s.year] || CONE_RADII[2025];
+    s.coneNm = [[0, 0]].concat(Object.keys(radii).map(Number).sort(function (a, b) { return a - b; })
+      .map(function (k) { return [k, radii[k]]; }));
+    s.forecasts = (FORECASTS[s.id] || []).map(function (a) {
+      var init = Date.parse(a[0]);
+      return {
+        init: init, issuedH: (init - t0) / 3600000 + ISSUE_DELAY_H,
+        pts: a[1].map(function (p) { return { tau: p[0], lat: p[1], lon: p[2], wind: p[3], time: init + p[0] * 3600000 }; })
+      };
+    });
+  });
+
+  function windInfo(kt) {
+    if (kt >= 64) { var c = saffirSimpson(kt); return { color: CAT_COLORS[c - 1], tag: 'Cat ' + c }; }
+    if (kt >= 34) return { color: '#4FC3F7', tag: 'TS' };
+    return { color: '#8FA8C4', tag: 'TD' };
+  }
+
+  function coneRadiusKm(s, tau) {
+    var tbl = s.coneNm;
+    for (var i = 1; i < tbl.length; i++) {
+      if (tau <= tbl[i][0]) return lerp(tbl[i - 1][1], tbl[i][1], (tau - tbl[i - 1][0]) / (tbl[i][0] - tbl[i - 1][0])) * NM;
+    }
+    return tbl[tbl.length - 1][1] * NM;
+  }
+
+  // Latest official forecast published at or before hour h (null before the first or after the last).
+  function forecastAt(s, h) {
+    var best = null;
+    for (var i = 0; i < s.forecasts.length; i++) {
+      if (s.forecasts[i].issuedH <= h) best = s.forecasts[i]; else break;
+    }
+    return best && h - best.issuedH <= STALE_AFTER_H ? best : null;
+  }
+
+  // Where the storm actually was at a given time, or null if outside the best track.
+  function actualAt(s, ms) {
+    var h = (ms - s.fixes[0].time) / 3600000;
+    return h < 0 || h > s.totalH ? null : stateAt(s, h);
+  }
+
+  function offsetLonLat(p, eastKm, northKm) {
+    return [p.lon + eastKm / (111.32 * Math.cos(p.lat * Math.PI / 180)), p.lat + northKm / 110.57];
+  }
+
+  function buildForecast(s, fc) {
+    var fp = fc.pts;
+    // Smooth forecast track through the forecast points, with radius interpolated by lead time.
+    var samples = [];
+    for (var j = 0; j < fp.length - 1; j++) {
+      for (var k = 0; k < 8; k++) {
+        var p = splinePoint(fp, j, k / 8);
+        samples.push({ lon: p.lon, lat: p.lat, r: coneRadiusKm(s, lerp(fp[j].tau, fp[j + 1].tau, k / 8)) });
+      }
+    }
+    var last = fp[fp.length - 1];
+    samples.push({ lon: last.lon, lat: last.lat, r: coneRadiusKm(s, last.tau) });
+
+    var left = [], right = [], n = samples.length, endDir = 0;
+    for (var i = 0; i < n; i++) {
+      var a = samples[Math.max(0, i - 1)], b = samples[Math.min(n - 1, i + 1)];
+      var ex = (b.lon - a.lon) * 111.32 * Math.cos(samples[i].lat * Math.PI / 180), ey = (b.lat - a.lat) * 110.57;
+      var len = Math.sqrt(ex * ex + ey * ey) || 1, nx = -ey / len, ny = ex / len;
+      left.push(offsetLonLat(samples[i], nx * samples[i].r, ny * samples[i].r));
+      right.push(offsetLonLat(samples[i], -nx * samples[i].r, -ny * samples[i].r));
+      if (i === n - 1) endDir = Math.atan2(ey, ex);
+    }
+    var cap = [], end = samples[n - 1];
+    for (var c = 1; c < 16; c++) {
+      var ang = endDir + Math.PI / 2 - Math.PI * c / 16;
+      cap.push(offsetLonLat(end, Math.cos(ang) * end.r, Math.sin(ang) * end.r));
+    }
+    var ring = left.concat(cap, right.reverse());
+    ring.push(ring[0]);
+
+    var points = [], misses = [];
+    fp.forEach(function (p) {
+      if (p.tau === 0) return;
+      var d = new Date(p.time), wi = windInfo(p.wind);
+      points.push({
+        lon: p.lon, lat: p.lat, color: wi.color,
+        label: p.tau % 24 === 0 ? DAYS[d.getUTCDay()] + ' ' + fmtTime(p.time) + ' UTC<br>' + Math.round(p.wind * 1.15078) + ' mph' : null
+      });
+      var act = actualAt(s, p.time);
+      if (act) misses.push({ geometry: { type: 'LineString', coordinates: [[p.lon, p.lat], [act.lon, act.lat]] } });
+    });
+    var trackLine = [].concat.apply([], fp.slice(0, -1).map(function (p, j) { return splineCoords(fp, j, 1); }));
+    return { ring: ring, points: points, misses: misses, track: trackLine };
+  }
+
+  // Distance between the forecast position at a lead time and where the storm really was then.
+  // Like NHC's own verification, only counted when the system was a tropical or subtropical
+  // cyclone both when the forecast was made and at the verifying time.
+  var CYCLONE = { TD: 1, TS: 1, HU: 1, SD: 1, SS: 1 };
+  function missKm(s, fc, tau) {
+    var p = fc.pts.filter(function (q) { return q.tau === tau; })[0];
+    if (!p) return null;
+    var act = actualAt(s, p.time), start = actualAt(s, fc.init);
+    if (!act || !start || !CYCLONE[act.fix.status] || !CYCLONE[start.fix.status]) return null;
+    return haversineKm(p, act);
+  }
+
+  function avgMissKm(s, tau) {
+    if (s['avgMiss' + tau] !== undefined) return s['avgMiss' + tau];
+    var errs = s.forecasts.map(function (fc) { return missKm(s, fc, tau); }).filter(function (e) { return e !== null; });
+    s['avgMiss' + tau] = errs.length ? errs.reduce(function (a, b) { return a + b; }, 0) / errs.length : null;
+    return s['avgMiss' + tau];
+  }
+
+  // ---------- Updating series and stats ----------
+
+  function updateSeries() {
+    var fx = storm.fixes, i = state.i;
+
+    var path = [];
+    for (var k = 0; k < i; k++) {
+      path.push({ geometry: { type: 'LineString', coordinates: storm.curves[k] }, color: fx[k].info.color });
+    }
+    if (state.f > 0) {
+      path.push({ geometry: { type: 'LineString', coordinates: splineCoords(fx, i, state.f) }, color: fx[i].info.color });
+    }
+    chart.series[S_PATH].setData(path, false, false, false);
+
+    var rings = [];
+    if (windToggle.checked && t < storm.totalH) {
+      [['r34', '#FFD54F', 'rgba(255,213,79,0.05)'], ['r50', '#FF9F43', 'rgba(255,159,67,0.06)'], ['r64', '#FF5A5F', 'rgba(255,90,95,0.08)']]
+        .forEach(function (w) {
+          var q = state[w[0]];
+          if (q && (q[0] + q[1] + q[2] + q[3]) > 0) {
+            rings.push({ geometry: { type: 'Polygon', coordinates: [windRing(state.lat, state.lon, q)] }, color: w[2], borderColor: w[1] });
+          }
+        });
+    }
+    chart.series[S_WIND].setData(rings, false, false, false);
+
+    // The official forecast only changes when a new advisory comes out, so rebuild it only then.
+    var fc = forecastOn() && t < storm.totalH ? forecastAt(storm, t) : null;
+    if (fc !== shownForecast || themeConeDirty) {
+      shownForecast = fc;
+      themeConeDirty = false;
+      var built = fc ? buildForecast(storm, fc) : null;
+      var cone = built && coneToggle.checked, details = built && detailToggle.checked;
+      chart.series[S_CONE].setData(cone ? [{ geometry: { type: 'Polygon', coordinates: [built.ring] }, color: mapTheme.cone.fill, borderColor: mapTheme.cone.line }] : [], false, false, false);
+      chart.series[S_FTRACK].setData(details ? [{ geometry: { type: 'LineString', coordinates: built.track } }] : [], false, false, false);
+      chart.series[S_MISS].setData(details ? built.misses : [], false, false, false);
+      chart.series[S_FCST].setData(details ? built.points : [], false, false, false);
+      updateForecastStats(fc);
+    }
+
+    if (i !== lastFixIdx) {
+      lastFixIdx = i;
+      var dots = [], lands = [];
+      for (k = 0; k <= i; k++) {
+        dots.push({ lon: fx[k].lon, lat: fx[k].lat, color: fx[k].info.color, fi: k });
+        if (fx[k].landfall) lands.push({ lon: fx[k].lon, lat: fx[k].lat, fi: k });
+      }
+      chart.series[S_FIXES].setData(dots, false, false, false);
+      chart.series[S_LANDFALL].setData(lands, false, false, false);
+      updateStats();
+    }
+    chart.redraw(false);
+  }
+
+  function updateStats() {
+    var f = state.fix, fx = storm.fixes, i = state.i;
+    el.cat.textContent = f.info.label;
+    el.cat.style.setProperty('--cat', f.info.color);
+    el.wind.innerHTML = f.wind + ' kt <small>' + Math.round(f.wind * 1.15078) + ' mph</small>';
+    el.pres.textContent = f.pres ? f.pres + ' mb' : 'n/a';
+
+    var a = i < fx.length - 1 ? fx[i] : fx[i - 1], b = i < fx.length - 1 ? fx[i + 1] : fx[i];
+    var hrs = (b.time - a.time) / 3600000;
+    if (a && b && hrs > 0) {
+      var kmh = haversineKm(a, b) / hrs;
+      el.move.innerHTML = compass(bearingDeg(a, b)) + ' ' + Math.round(kmh) + ' km/h <small>' + Math.round(kmh / 1.609) + ' mph</small>';
+    } else {
+      el.move.textContent = '—';
+    }
+
+    el.diam.innerHTML = f.r34Km
+      ? Math.round(f.r34Km * 2) + ' km <small>' + Math.round(f.r34Km * 2 / 1.609) + ' mi</small>'
+      : '<small>no 34-kt winds</small>';
+  }
+
+  function updateForecastStats(fc) {
+    // "NHC forecast" shows with either layer; "Day-3 miss" belongs to the forecast details.
+    [].forEach.call(document.querySelectorAll('.fc-row'), function (e) { e.hidden = !forecastOn(); });
+    [].forEach.call(document.querySelectorAll('.miss-row'), function (e) { e.hidden = !detailToggle.checked; });
+    if (!fc) {
+      el.fc.innerHTML = '<small>no advisory in effect</small>';
+      el.miss.innerHTML = '&mdash;';
+      return;
+    }
+    el.fc.innerHTML = fmtTime(fc.init + ISSUE_DELAY_H * 3600000) + ' <small>UTC</small>';
+    var m = missKm(storm, fc, 72);
+    el.miss.innerHTML = m === null ? '<small>not verifiable</small>' : Math.round(m) + ' km <small>' + Math.round(m / 1.609) + ' mi</small>';
+  }
+
+  function updateLiveStats() {
+    el.time.textContent = fmtTime(state.time);
+    el.pos.textContent = Math.abs(state.lat).toFixed(1) + '°' + (state.lat >= 0 ? 'N' : 'S') + ' ' +
+      Math.abs(state.lon).toFixed(1) + '°' + (state.lon >= 0 ? 'E' : 'W');
+  }
+
+  // ---------- Storm selection ----------
+
+  function fitToStorm(s) {
+    var mv = chart.mapView, x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    s.fixes.forEach(function (f) {
+      // Include the wind field extent so large storms are not cut off at the edges.
+      [[0, 0], [f.cloudKm, 0], [-f.cloudKm, 0], [0, f.cloudKm], [0, -f.cloudKm]].forEach(function (o) {
+        var lat = f.lat + o[1] / 111, lon = f.lon + o[0] / (111 * Math.cos(f.lat * Math.PI / 180));
+        var u = mv.lonLatToProjectedUnits({ lon: lon, lat: lat });
+        x1 = Math.min(x1, u.x); x2 = Math.max(x2, u.x); y1 = Math.min(y1, u.y); y2 = Math.max(y2, u.y);
+      });
+    });
+    mv.fitToBounds({ x1: x1, y1: y1, x2: x2, y2: y2 }, 30, false);
+  }
+
+  function loadStorm(idx) {
+    pause();
+    storm = STORMS[idx];
+    t = 0;
+    lastFixIdx = -1;
+    shownForecast = undefined;
+    scrubber.max = storm.totalH;
+    scrubber.value = 0;
+
+    chart.series[S_TRACK].setData([{
+      geometry: { type: 'LineString', coordinates: [].concat.apply([], storm.curves) }
+    }], false);
+
+    highlightGridRow(idx);
+
+    fitToStorm(storm);
+    if (state) setTimeout(prefetchStyles, 300);
+    dirty = true;
+  }
+
+  function fmtDate(ms) {
+    return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
+  STORMS.slice().map(function (s, i) { return { s: s, i: i }; })
+    .sort(function (a, b) { return b.s.year - a.s.year || b.s.peak.wind - a.s.peak.wind; })
+    .forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.i;
+      opt.textContent = o.s.name + ' (' + o.s.year + ') — ' + o.s.peak.info.short;
+      stormSelect.appendChild(opt);
+    });
+
+  // ---------- Storm comparison grid (Highcharts Grid Lite) ----------
+
+  var gridHighlight = document.createElement('style');
+  document.head.appendChild(gridHighlight);
+
+  // Rows keep their original data index in data-row-id (also after sorting), which is the STORMS index.
+  function highlightGridRow(idx) {
+    gridHighlight.textContent =
+      '#stormGrid tr[data-row-id="' + idx + '"] td { background: rgba(79,195,247,0.2) !important; }' +
+      '#stormGrid tr[data-row-id="' + idx + '"] td:first-child { box-shadow: inset 3px 0 0 #4fc3f7; }';
+  }
+
+  function stormOfCell(cell) {
+    return cell && cell.row && cell.row.id !== void 0 ? STORMS[cell.row.id] : null;
+  }
+
+  if (window.Grid && Grid.grid) {
+    Grid.grid('stormGrid', {
+      data: {
+        providerType: 'local',
+        columns: {
+          name: STORMS.map(function (s) { return s.name; }),
+          year: STORMS.map(function (s) { return s.year; }),
+          peak: STORMS.map(function (s) { return s.peak.status === 'HU' ? saffirSimpson(s.peak.wind) : 0; }),
+          wind: STORMS.map(function (s) { return s.peak.wind; }),
+          pres: STORMS.map(function (s) { return s.minPres; }),
+          start: STORMS.map(function (s) { return s.fixes[0].time; }),
+          days: STORMS.map(function (s) { return Math.round(s.totalH / 2.4) / 10; }),
+          landfalls: STORMS.map(function (s) { return s.landfalls; }),
+          miss72: STORMS.map(function (s) { var m = avgMissKm(s, 72); return m === null ? null : Math.round(m); }),
+          missN: STORMS.map(function (s) { return s.forecasts.filter(function (fc) { return missKm(s, fc, 72) !== null; }).length; })
+        }
+      },
+      columnDefaults: { sorting: { enabled: true } },
+      columns: [
+        { id: 'name', header: { format: 'Storm' }, cells: { formatter: function () { return '<b>' + this.value + '</b>'; } } },
+        { id: 'year', header: { format: 'Year' }, sorting: { order: 'desc' }, cells: { formatter: function () { return String(this.value); } } },
+        {
+          id: 'peak', header: { format: 'Peak' },
+          cells: {
+            formatter: function () {
+              var s = stormOfCell(this), info = s ? s.peak.info : { color: CAT_COLORS[this.value - 1], label: 'Category ' + this.value };
+              return '<span class="peak-dot" style="background:' + info.color + '"></span>' + info.label;
+            }
+          }
+        },
+        { id: 'wind', header: { format: 'Peak wind' }, cells: { formatter: function () { return this.value + ' kt<span class="grid-sub">' + Math.round(this.value * 1.15078) + ' mph</span>'; } } },
+        { id: 'pres', header: { format: 'Min pressure' }, cells: { format: '{value} mb' } },
+        {
+          id: 'start', header: { format: 'Dates (UTC)' },
+          cells: {
+            formatter: function () {
+              var s = stormOfCell(this);
+              return fmtDate(this.value) + (s ? ' – ' + fmtDate(s.fixes[s.fixes.length - 1].time) : '');
+            }
+          }
+        },
+        { id: 'days', header: { format: 'Duration' }, cells: { format: '{value} days' } },
+        { id: 'landfalls', header: { format: 'Landfalls' } },
+        { id: 'miss72', header: { format: '<span title="Average distance between NHC\'s 72-hour forecast position and where the storm actually was">Day-3 miss</span>' }, cells: { formatter: function () {
+          var s = stormOfCell(this), n = s ? s.forecasts.filter(function (fc) { return missKm(s, fc, 72) !== null; }).length : 0;
+          return this.value === null || this.value === undefined ? '\u2014' : this.value + ' km<span class="grid-sub">' + n + ' fcst</span>';
+        } } },
+        { id: 'missN', enabled: false }
+      ]
+    });
+
+    document.getElementById('stormGrid').addEventListener('click', function (e) {
+      var row = e.target.closest && e.target.closest('tr[data-row-id]');
+      if (!row) return;
+      var idx = parseInt(row.getAttribute('data-row-id'), 10);
+      if (isNaN(idx) || !STORMS[idx]) return;
+      stormSelect.value = idx;
+      stormSelect.dispatchEvent(new Event('change'));
+      document.getElementById('container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  } else {
+    document.getElementById('stormGrid').textContent = 'Highcharts Grid Lite did not load, so the comparison table is unavailable.';
+  }
+
+  // ---------- Playback ----------
+
+  function play() {
+    if (t >= storm.totalH) t = 0;
+    playing = true;
+    playBtn.innerHTML = '&#10074;&#10074; Pause';
+  }
+
+  function pause() {
+    playing = false;
+    playBtn.innerHTML = '&#9654; Play';
+  }
+
+  playBtn.addEventListener('click', function () { if (playing) pause(); else play(); });
+  resetBtn.addEventListener('click', function () { pause(); t = 0; dirty = true; });
+  scrubber.addEventListener('input', function () { pause(); t = parseFloat(scrubber.value); dirty = true; });
+  stormSelect.addEventListener('change', function () {
+    loadStorm(parseInt(stormSelect.value, 10));
+    try { history.replaceState(null, '', '#' + storm.id); } catch (e) {}
+  });
+  windToggle.addEventListener('change', function () { dirty = true; });
+  [coneToggle, detailToggle].forEach(function (box) {
+    box.addEventListener('change', function () { shownForecast = undefined; dirty = true; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+      e.preventDefault();
+      if (playing) pause(); else play();
+    }
+  });
+
+  var lastTs = null;
+  function frame(ts) {
+    var dt = lastTs === null ? 0 : Math.min(0.1, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    if (playing) {
+      t += dt * parseFloat(speedSelect.value);
+      if (t >= storm.totalH) { t = storm.totalH; pause(); }
+      scrubber.value = t;
+      dirty = true;
+    }
+
+    if (dirty) {
+      dirty = false;
+      state = stateAt(storm, t);
+      updateSeries();     // redraw -> 'render' event -> positionStorm()
+      updateLiveStats();
+    }
+
+    // Counterclockwise spin, faster for stronger storms (visual rate, not physical).
+    angle -= dt * (14 + state.wind * 0.22);
+    spinG.attr({ rotation: angle });
+
+    // Cross-fade cloud styles as the storm organizes or weakens; fade the eye in and out.
+    var k = Math.min(1, dt * 2.2);
+    var lookNow = lookKey(storm, state.fix.info.variant);
+    ensureStyle(lookNow);
+    Object.keys(cloudImgs).forEach(function (v) {
+      var c = cloudImgs[v];
+      c.target = v === lookNow ? 1 : 0;
+      if (Math.abs(c.target - c.cur) > 0.002 || themeDirty) {
+        c.cur += (c.target - c.cur) * k;
+        c.el.attr({ opacity: satStyle === 'vis' ? c.cur : 0 });
+        c.ir.attr({ opacity: satStyle === 'ir' ? c.cur : 0 });
+        c.shadow.attr({ opacity: c.cur * mapTheme.shadow * (satStyle === 'ir' ? 0.4 : 1) });
+      }
+    });
+    themeDirty = false;
+    if (Math.abs(state.eye - eyeCur) > 0.002) { eyeCur += (state.eye - eyeCur) * k; eye.attr({ opacity: eyeCur }); }
+
+    // Once the track has ended the storm fades away; scrubbing back or replaying brings it back.
+    var stormTarget = t >= storm.totalH ? 0 : 1;
+    if (Math.abs(stormTarget - stormCur) > 0.002) {
+      stormCur += (stormTarget - stormCur) * Math.min(1, dt * 1.5);
+      if (Math.abs(stormTarget - stormCur) <= 0.002) stormCur = stormTarget;
+      clipG.attr({ opacity: stormCur });
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // Optional deep link: #AL122005 or #AL122005@96 (storm id, hours since genesis).
+  var hash = /^#(AL\d{6})(?:@([\d.]+))?/.exec(location.hash);
+  var hashIdx = hash ? STORMS.findIndex(function (s) { return s.id === hash[1]; }) : -1;
+  if (hashIdx >= 0) stormSelect.value = hashIdx;
+  loadStorm(parseInt(stormSelect.value, 10));
+  if (hashIdx >= 0 && hash[2]) { t = Math.min(storm.totalH, parseFloat(hash[2])); scrubber.value = t; }
+  state = stateAt(storm, t);
+  ensureStyle(lookKey(storm, state.fix.info.variant)).cur = 1;
+  requestAnimationFrame(frame);
+  setTimeout(prefetchStyles, 400);
+
+  } catch (e) {
+    showError((e && e.message) ? e.message : String(e));
+  }
+})();
+</script>
+</body>
+</html>

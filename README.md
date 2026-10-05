@@ -21,6 +21,10 @@ Replay 20 real Atlantic hurricanes (Katrina 2005 through Melissa 2025) on an int
 
 The cloud imagery is a procedural rendering, not real satellite imagery. The cone is rebuilt from NHC's inputs using NHC's method, so it may differ slightly in shape from NHC's own graphics.
 
+## Rebuilding and adding storms
+
+`hurricane.html` is generated from `tools/template.html` and the JSON in `tools/data/`. See [tools/README.md](tools/README.md) to rebuild it, add storms or refresh the data from NOAA. Only Python 3 is needed.
+
 ## Built with
 
 - [Highcharts Maps](https://www.highcharts.com/products/maps/)
